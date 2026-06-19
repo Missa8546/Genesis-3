@@ -7,6 +7,10 @@
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body, html { width: 100%; height: 100%; overflow: hidden; background: #010003; font-family: 'Segoe UI', sans-serif; cursor: none; user-select: none; }
+        @media (hover: none) and (pointer: coarse) {
+            body, html { cursor: auto; }
+            .btn-start, .btn-close-letter, .envelope-container { cursor: pointer !important; }
+        }
         #canvas-container { width: 100%; height: 100%; position: absolute; top: 0; left: 0; z-index: 1; }
         #intro-screen { position: absolute; inset: 0; z-index: 20; display: flex; justify-content: center; align-items: center; background: #020005; transition: opacity 0.4s; }
         .btn-start { background: transparent; color: #d6b4fc; border: 2px solid #d6b4fc; padding: 18px 45px; font-size: 1.25rem; font-weight: bold; border-radius: 40px; cursor: none; letter-spacing: 5px; box-shadow: 0 0 25px rgba(214,180,252,0.25); transition: all 0.4s cubic-bezier(0.25,1,0.5,1); }
@@ -311,6 +315,17 @@ function init() {
     window.addEventListener('mousemove', onMM);
     window.addEventListener('pointermove', onMM);
     window.addEventListener('click', onClick);
+
+    // Touch support for mobile
+    window.addEventListener('touchmove', onTouchMove, { passive: true });
+    window.addEventListener('touchstart', onTouchStart, { passive: true });
+    window.addEventListener('touchend', onTouchEnd, { passive: true });
+
+    // Hide custom cursor on touch devices
+    if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+        document.getElementById('custom-cursor-container').style.display = 'none';
+        document.body.style.cursor = 'auto';
+    }
 }
 
 function buildStarfield(tex) {
@@ -513,6 +528,50 @@ function onMM(e){
     mouse.x=(e.clientX/innerWidth)*2-1; mouse.y=-(e.clientY/innerHeight)*2+1;
     targetX=e.clientX;targetY=e.clientY;
     if(screenX===-100){screenX=targetX;screenY=targetY;}
+}
+function getTouchPos(e) {
+    const t = e.changedTouches ? e.changedTouches[0] : e.touches[0];
+    return t ? { x: t.clientX, y: t.clientY } : null;
+}
+function onTouchMove(e) {
+    const pos = getTouchPos(e);
+    if (!pos) return;
+    mouse.x = (pos.x / innerWidth) * 2 - 1;
+    mouse.y = -(pos.y / innerHeight) * 2 + 1;
+    targetX = pos.x; targetY = pos.y;
+}
+let touchStartPos = null;
+function onTouchStart(e) {
+    const pos = getTouchPos(e);
+    if (!pos) return;
+    touchStartPos = { x: pos.x, y: pos.y };
+    mouse.x = (pos.x / innerWidth) * 2 - 1;
+    mouse.y = -(pos.y / innerHeight) * 2 + 1;
+    targetX = pos.x; targetY = pos.y;
+    if (screenX === -100) { screenX = targetX; screenY = targetY; }
+    // Show hover label on touch
+    if (timelineStage === 4) {
+        raycaster.setFromCamera(mouse, camera);
+        const hph = raycaster.intersectObjects(phraseObjects);
+        const hc2 = raycaster.intersectObjects(interactableConstellations);
+        if (hph.length > 0) { cardLabel.innerHTML = hph[0].object.userData.name + ' ✦'; document.body.classList.add('cursor-hovering'); }
+        else if (hc2.length > 0) { cardLabel.innerHTML = hc2[0].object.userData.name; document.body.classList.add('cursor-hovering'); }
+        else document.body.classList.remove('cursor-hovering');
+    }
+}
+function onTouchEnd(e) {
+    const pos = getTouchPos(e);
+    if (!pos || !touchStartPos) return;
+    const dx = Math.abs(pos.x - touchStartPos.x);
+    const dy = Math.abs(pos.y - touchStartPos.y);
+    // Only trigger click if it was a tap (not a drag/pan)
+    if (dx < 12 && dy < 12) {
+        mouse.x = (pos.x / innerWidth) * 2 - 1;
+        mouse.y = -(pos.y / innerHeight) * 2 + 1;
+        onClick();
+    }
+    document.body.classList.remove('cursor-hovering');
+    touchStartPos = null;
 }
 function onClick(){
     if(timelineStage!==4)return;
